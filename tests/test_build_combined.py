@@ -26,7 +26,7 @@ def run(tmp_path):
 
 def test_ids_normalised_and_outer_joined(tmp_path):
     combined, *_ = run(tmp_path)
-    assert list(combined["participant_id"]) == ["001", "002", "003", "009"]
+    assert list(combined["participant_id"]) == ["001", "002", "003", "009", "PHE001", "PHE003"]
     assert set(combined["timepoint"]) == {"baseline"}
     row1 = combined.set_index("participant_id").loc["001"]
     assert row1["csf_il6"] == 3.1 and row1["hippo"] == 4000

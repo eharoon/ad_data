@@ -48,8 +48,8 @@ def load_config(path: Path) -> dict:
 def unresolved(src: dict, cfg: dict) -> list[str]:
     """Return the rules a source still needs before it can be merged."""
     missing = []
-    if cfg.get("id_format") in (None, TODO):
-        missing.append("global id_format")
+    if src.get("id_format", cfg.get("id_format")) in (None, TODO):
+        missing.append("id_format")
     if src.get("id_rule") in (None, TODO):
         missing.append("id_rule")
     if src.get("timepoint") in (None, TODO):
@@ -139,7 +139,7 @@ def prepare(src: dict, cfg: dict, data_dir: Path):
     res.rows_read = len(df)
 
     crosswalk = load_crosswalk(src["id_rule"], data_dir)
-    ids = df[src["id_column"]].map(lambda v: canonical_id(v, src["id_rule"], cfg["id_format"], crosswalk))
+    ids = df[src["id_column"]].map(lambda v: canonical_id(v, src["id_rule"], src.get("id_format", cfg["id_format"]), crosswalk))
     res.unparsed_ids = sorted({str(r) for r, i in zip(df[src["id_column"]], ids) if pd.isna(i) and pd.notna(r)})
     tps = assign_timepoint(df, src["timepoint"])
     if isinstance(src["timepoint"], dict):

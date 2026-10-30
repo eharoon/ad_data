@@ -10,6 +10,7 @@
 #   name          short label, used in the dictionary and QC report
 #   file, sheet   location inside data_dir; header_row is 0-based
 #   id_column     column holding the participant ID as written in this file
+#   id_format     optional per-source override of the global id_format
 #   id_rule       how the raw ID becomes the canonical participant_id:
 #                   {type: as_is}                              use the value (numeric IDs are formatted with id_format)
 #                   {type: regex, pattern: "M(\\d+)", group: 1} extract the number, then apply id_format
@@ -23,7 +24,9 @@
 
 data_dir: ../../01_Comb_folder   # relative to this file; override with --data-dir
 
-# Python format string applied to the integer participant number, e.g. "{:03d}" -> 007
+# Python format string applied to the integer participant number, e.g.
+# "MIDL{:03d}" -> MIDL007. A source can override it with its own id_format
+# (e.g. a second cohort keyed PHE###).
 id_format: TODO
 
 # Source whose participants define the study roster for the unmatched-ID check.
@@ -117,7 +120,7 @@ sources:
     id_column: ID
     id_rule: TODO
     timepoint: TODO
-    # ~1,850 columns; may overlap the MRS and metabolic files above.
+    # ~1,850 columns. Draft inventory: separate Phenom cohort, not a copy of the Midlife MRS files.
 
   # ---- Structural MRI (FreeSurfer) ----------------------------------------
   - {name: lh_cortical_area,      file: lh_cortical_area.xlsx,      id_column: id, id_rule: TODO, timepoint: TODO}
@@ -138,6 +141,7 @@ sources:
   - {name: xtract,     file: midlife_xtract.xlsx,      id_column: SubjID, id_rule: TODO, timepoint: TODO}
   - {name: dti_combined, file: dti_combined.xlsx,      id_column: SubjID, id_rule: TODO, timepoint: TODO, drop_columns: [SubjID2]}
   - {name: dti_ctnfr2, file: dti_ctnfr2.xlsx,          id_column: SubjID, id_rule: TODO, timepoint: TODO}
+  # Draft inventory: some ODI columns here are copied values; not clean yet.
   - {name: dti_ctnfr2_20230406, file: 20230406_ctnfr2_dti.xlsx, sheet: Sheet1, id_column: SubjID, id_rule: TODO, timepoint: TODO}
   - {name: reho,       file: rehocomb.xlsx,            id_column: SubjID, id_rule: TODO, timepoint: TODO}
 

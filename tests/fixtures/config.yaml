@@ -24,3 +24,10 @@ sources:
     id_column: SubjID
     id_rule: TODO
     timepoint: TODO
+  - name: other_cohort
+    file: mri.csv
+    id_column: SubjID
+    id_rule: {type: as_is}
+    id_format: "PHE{:03d}"
+    timepoint: baseline
+    prefix: phe_

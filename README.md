@@ -10,7 +10,7 @@ Data and analyses for the Alzheimer's disease (AD) line of work in the Emory Beh
 |---|---|
 | `config/sources.yaml` | Linking rules: for each source file, its ID column, how that ID maps to the canonical participant ID, its timepoint, and any renames |
 | `scripts/build_combined.py` | Reads the sources, applies the rules, merges, and writes the outputs below |
-| `output/combined.csv` | Merged table (git-ignored) |
+| `output/<table>.csv` | Merged table(s), `combined.csv` by default; a source can be sent to a separate table such as a second cohort (git-ignored) |
 | `output/conflicts.csv` | Every cell where two sources disagree (git-ignored) |
 | `docs/data_dictionary.csv` | One row per variable: source file, sheet, original column name, rename |
 | `docs/merge_qc_report.md` | Per-source counts, unmapped IDs, unmatched participants, duplicate keys, conflicting values |

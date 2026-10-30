@@ -1,0 +1,151 @@
+# Linking rules for scripts/build_combined.py.
+#
+# STATUS: scaffold. The file, sheet, header row and ID column below describe
+# what each file contains. The rules that decide how files link (id_format,
+# each source's id_rule and timepoint, renames, roster, and which overlapping
+# files to keep) are "TODO" until Ebrahim confirms them from the source-data
+# inventory. A source with a TODO rule is skipped and listed in the QC report.
+#
+# Per-source fields
+#   name          short label, used in the dictionary and QC report
+#   file, sheet   location inside data_dir; header_row is 0-based
+#   id_column     column holding the participant ID as written in this file
+#   id_rule       how the raw ID becomes the canonical participant_id:
+#                   {type: as_is}                              use the value (numeric IDs are formatted with id_format)
+#                   {type: regex, pattern: "M(\\d+)", group: 1} extract the number, then apply id_format
+#                   {type: crosswalk, file:, sheet:, from:, to:} look the raw ID up in a linking table
+#   timepoint     a fixed label (e.g. "baseline") or {column: <col>, map: {raw: label}}
+#   prefix        prepended to every variable name from this source
+#   rename        {original column: new name}; overrides prefix for that column
+#   drop_columns  columns not carried into the combined table
+#   on_duplicate  "error" (default: skip the source) or "first" (keep first row per key)
+#   include       false leaves the source out entirely
+
+data_dir: ../../01_Comb_folder   # relative to this file; override with --data-dir
+
+# Python format string applied to the integer participant number, e.g. "{:03d}" -> 007
+id_format: TODO
+
+# Source whose participants define the study roster for the unmatched-ID check.
+roster: TODO
+
+sources:
+  # ---- Clinical / REDCap -------------------------------------------------
+  - name: demographics_master
+    file: demographics_master.xlsx
+    id_column: record_id
+    id_rule: TODO
+    timepoint: TODO            # redcap_event_name holds screening_visit_arm_1
+    drop_columns: [redcap_event_name]
+
+  - name: demographics
+    file: demographics.xlsx
+    id_column: record_id
+    id_rule: TODO
+    timepoint: TODO
+    drop_columns: [redcap_event_name]
+    # Overlaps demographics_master; the inventory decides which one is kept.
+
+  - name: redcap_mrs_study
+    file: MRSInMidlifeDepressi.xlsx
+    id_column: record_id
+    id_rule: TODO
+    timepoint: TODO            # redcap_event_name holds visit_1_scanning_arm_1
+    drop_columns: [redcap_event_name]
+
+  - name: metabolic_markers
+    file: Midlife_metabolic_markers_07.16.26.xlsx
+    sheet: "Midlife_Behavior, Plasma data_0"
+    header_row: 1              # row 0 is a banner ("In Red = suggested variables")
+    id_column: record_id       # file also has unique_id (MIDL01 style)
+    id_rule: TODO
+    timepoint: TODO
+
+  - name: albumin
+    file: alb_phenom.xlsx
+    id_column: "subject_id inpatient_day_2_arm_1"   # a second ID column holds day 3 (CSF) IDs
+    id_rule: TODO
+    timepoint: TODO
+
+  - name: cantab_session
+    file: RowBySession_Midlife.csv
+    id_column: Subject ID
+    id_rule: TODO
+    timepoint: TODO            # Visit Identifier / Visit Name
+
+  # ---- Fluid biomarkers --------------------------------------------------
+  - name: ad_plasma
+    file: "!ADsource.xlsx"
+    sheet: plasma
+    id_column: Haroon ID
+    id_rule: TODO
+    timepoint: TODO
+    prefix: plasma_
+    drop_columns: [Quanterix plate layout]
+
+  - name: ad_csf
+    file: "!ADsource.xlsx"
+    sheet: CSF
+    id_column: Haroon ID
+    id_rule: TODO
+    timepoint: TODO
+    prefix: csf_
+    drop_columns: [Quanterix plate layout]
+
+  - name: plasma_immune
+    file: "!PlasmaImm_Source.xlsx"
+    id_column: "Assay/ Patient ID"
+    id_rule: TODO
+    timepoint: TODO
+    prefix: plasma_
+
+  - name: csf_immune
+    file: "!CSFImm_Source.xlsx"
+    id_column: "Assay/ Patient ID"
+    id_rule: TODO               # IDs look like M001
+    timepoint: TODO
+    prefix: csf_
+
+  # ---- MRS -----------------------------------------------------------------
+  - {name: mrs_acc,     file: MidLife-ACC-MRS-single-voxel.csv,     id_column: SubjID, id_rule: TODO, timepoint: TODO}
+  - {name: mrs_pcc,     file: MidLife-PCC-MRS-single-voxel.csv,     id_column: SubjID, id_rule: TODO, timepoint: TODO}
+  - {name: mrs_l_basal, file: MidLife-L_Basal-MRS-single-voxel.csv, id_column: SubjID, id_rule: TODO, timepoint: TODO}
+  - {name: mrs_r_basal, file: MidLife-R_Basal-MRS-single-voxel.csv, id_column: SubjID, id_rule: TODO, timepoint: TODO}
+
+  - name: phenom_master
+    file: Phenom_Master_F.xlsx
+    id_column: ID
+    id_rule: TODO
+    timepoint: TODO
+    # ~1,850 columns; may overlap the MRS and metabolic files above.
+
+  # ---- Structural MRI (FreeSurfer) ----------------------------------------
+  - {name: lh_cortical_area,      file: lh_cortical_area.xlsx,      id_column: id, id_rule: TODO, timepoint: TODO}
+  - {name: rh_cortical_area,      file: rh_cortical_area.xlsx,      id_column: id, id_rule: TODO, timepoint: TODO}
+  - {name: lh_cortical_thickness, file: lh_cortical_thickness.xlsx, id_column: id, id_rule: TODO, timepoint: TODO}
+  - {name: rh_cortical_thickness, file: rh_cortical_thickness.xlsx, id_column: id, id_rule: TODO, timepoint: TODO}
+  - {name: lh_cortical_volume,    file: lh_cortical_volume.xlsx,    id_column: id, id_rule: TODO, timepoint: TODO}
+  - {name: rh_cortical_volume,    file: rh_cortical_volume.xlsx,    id_column: id, id_rule: TODO, timepoint: TODO}
+  - {name: subcortical_volume,    file: subcortical_volume.xlsx,    id_column: id, id_rule: TODO, timepoint: TODO}
+  - {name: hippo_lh,    file: MidLife-hipposubfields.lh-v22.xlsx,    id_column: SubjID, id_rule: TODO, timepoint: TODO, prefix: lh_hippo_}
+  - {name: hippo_rh,    file: MidLife-hipposubfields.rh-v22.xlsx,    id_column: SubjID, id_rule: TODO, timepoint: TODO, prefix: rh_hippo_}
+  - {name: amygdala_lh, file: MidLife-amygdalar-nuclei.lh-v22.xlsx,  id_column: SubjID, id_rule: TODO, timepoint: TODO, prefix: lh_amyg_}
+  - {name: amygdala_rh, file: MidLife-amygdalar-nuclei.rh-v22.xlsx,  id_column: SubjID, id_rule: TODO, timepoint: TODO, prefix: rh_amyg_}
+  - {name: thalamus_lh, file: MidLife-thalamic-nuclei.lh-v13.xlsx,   id_column: SubjID, id_rule: TODO, timepoint: TODO, prefix: lh_thal_}
+  - {name: thalamus_rh, file: MidLife-thalamic-nuclei.rh-v13.xlsx,   id_column: SubjID, id_rule: TODO, timepoint: TODO, prefix: rh_thal_}
+
+  # ---- Diffusion and resting-state MRI -----------------------------------
+  - {name: xtract,     file: midlife_xtract.xlsx,      id_column: SubjID, id_rule: TODO, timepoint: TODO}
+  - {name: dti_combined, file: dti_combined.xlsx,      id_column: SubjID, id_rule: TODO, timepoint: TODO, drop_columns: [SubjID2]}
+  - {name: dti_ctnfr2, file: dti_ctnfr2.xlsx,          id_column: SubjID, id_rule: TODO, timepoint: TODO}
+  - {name: dti_ctnfr2_20230406, file: 20230406_ctnfr2_dti.xlsx, sheet: Sheet1, id_column: SubjID, id_rule: TODO, timepoint: TODO}
+  - {name: reho,       file: rehocomb.xlsx,            id_column: SubjID, id_rule: TODO, timepoint: TODO}
+
+  # ---- Not participant-level tables (left out unless the inventory says otherwise)
+  - name: cantab_measure_long
+    file: RowByMeasure_Midlife.csv
+    include: false
+    exclude_reason: long format (one row per measure); needs a pivot rule
+  # Also not merged: Data_dictionary.xlsx and midlife_xtract_glossary.xlsx
+  # (documentation), RowBy*Norms_Midlife.csv (normed copies), booking.ics,
+  # and the roi*/midlife-*-correlation-*.xlsx files (analysis results, not data).

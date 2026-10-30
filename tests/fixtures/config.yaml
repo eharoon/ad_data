@@ -1,0 +1,35 @@
+data_dir: .
+id_format: "{:03d}"
+roster: {combined: clinical}
+sources:
+  - name: clinical
+    file: clinical.csv
+    id_column: record_id
+    id_rule: {type: as_is}
+    timepoint: {column: event, map: {screening_visit_arm_1: baseline}}
+    recode: {sex: {1: male, 2: female}}
+  - name: csf
+    file: csf.csv
+    id_column: Patient ID
+    id_rule: {type: regex, pattern: "M(\\d+)", group: 1}
+    timepoint: baseline
+    rename: {IL6: csf_il6}
+    on_duplicate: first
+  - name: mri
+    file: mri.csv
+    id_column: SubjID
+    id_rule: {type: as_is}
+    timepoint: baseline
+  - name: pending
+    file: mri.csv
+    id_column: SubjID
+    id_rule: TODO
+    timepoint: TODO
+  - name: other_cohort
+    file: mri.csv
+    id_column: SubjID
+    id_rule: {type: as_is}
+    id_format: "PHE{:03d}"
+    timepoint: baseline
+    table: phenom
+    scale: {hippo: 0.001}

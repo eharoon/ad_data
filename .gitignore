@@ -1,0 +1,16 @@
+# Raw and derived participant data stay out of git.
+data/
+output/
+*.xlsx
+*.xls
+*.csv
+*.sav
+*.rds
+
+# Allowed: synthetic test fixtures and generated documentation.
+!tests/fixtures/*.csv
+!docs/*.csv
+
+__pycache__/
+*.pyc
+.venv/

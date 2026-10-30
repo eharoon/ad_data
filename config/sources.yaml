@@ -19,6 +19,9 @@
 #   prefix        prepended to every variable name from this source
 #   rename        {original column: new name}; overrides prefix for that column
 #   drop_columns  columns not carried into the combined table
+#   table         output table name (default "combined"); a second cohort can go to its own table
+#   recode        {column: {raw value: new value}}, e.g. to align sex codings
+#   scale         {column: factor}, e.g. 1000 to turn ng/mL into pg/mL
 #   on_duplicate  "error" (default: skip the source) or "first" (keep first row per key)
 #   include       false leaves the source out entirely
 
@@ -29,7 +32,8 @@ data_dir: ../../01_Comb_folder   # relative to this file; override with --data-d
 # (e.g. a second cohort keyed PHE###).
 id_format: TODO
 
-# Source whose participants define the study roster for the unmatched-ID check.
+# Source whose participants define the roster for the unmatched-ID check:
+# one source name, or {table: source name} when there is more than one table.
 roster: TODO
 
 sources:
@@ -64,7 +68,7 @@ sources:
     id_rule: TODO
     timepoint: TODO
 
-  - name: albumin
+  - name: albumin              # Phenom cohort (PHE### IDs); draft inventory flags a day-3 ID shift
     file: alb_phenom.xlsx
     id_column: "subject_id inpatient_day_2_arm_1"   # a second ID column holds day 3 (CSF) IDs
     id_rule: TODO
@@ -120,9 +124,17 @@ sources:
     id_column: ID
     id_rule: TODO
     timepoint: TODO
+    # Phenom cohort; draft inventory proposes a separate table (table: phenom).
     # ~1,850 columns. Draft inventory: separate Phenom cohort, not a copy of the Midlife MRS files.
 
+  - name: phenom_with_metabolics
+    file: phenom_with_metabolics.csv
+    id_column: id                # Phenom cohort (study = Phenom)
+    id_rule: TODO
+    timepoint: TODO
+
   # ---- Structural MRI (FreeSurfer) ----------------------------------------
+  # The amygdala, hippocampus and thalamus files write IDs as MidLife_subj###.
   - {name: lh_cortical_area,      file: lh_cortical_area.xlsx,      id_column: id, id_rule: TODO, timepoint: TODO}
   - {name: rh_cortical_area,      file: rh_cortical_area.xlsx,      id_column: id, id_rule: TODO, timepoint: TODO}
   - {name: lh_cortical_thickness, file: lh_cortical_thickness.xlsx, id_column: id, id_rule: TODO, timepoint: TODO}

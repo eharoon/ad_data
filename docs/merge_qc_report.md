@@ -1,6 +1,6 @@
 # Merge QC report
 
-Generated 2026-10-30 01:14 UTC by `scripts/build_combined.py`.
+Generated 2026-10-30 01:15 UTC by `scripts/build_combined.py`.
 
 ## Summary
 
@@ -25,6 +25,7 @@ No source was merged, because every source is still waiting for confirmed linkin
 | mrs_l_basal | awaiting rules |  |  |  | needs id_format, id_rule, timepoint |
 | mrs_r_basal | awaiting rules |  |  |  | needs id_format, id_rule, timepoint |
 | phenom_master | awaiting rules |  |  |  | needs id_format, id_rule, timepoint |
+| phenom_with_metabolics | awaiting rules |  |  |  | needs id_format, id_rule, timepoint |
 | lh_cortical_area | awaiting rules |  |  |  | needs id_format, id_rule, timepoint |
 | rh_cortical_area | awaiting rules |  |  |  | needs id_format, id_rule, timepoint |
 | lh_cortical_thickness | awaiting rules |  |  |  | needs id_format, id_rule, timepoint |
@@ -55,7 +56,7 @@ None.
 
 ## Unmatched participants
 
-No roster source is set (`roster` in config/sources.yaml), so unmatched IDs are not checked yet.
+Not checked, because nothing was merged.
 
 ## Duplicate participant-timepoint keys
 

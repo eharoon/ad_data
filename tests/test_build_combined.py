@@ -26,7 +26,7 @@ def run(tmp_path):
 
 def test_ids_normalised_and_outer_joined(tmp_path):
     combined, *_ = run(tmp_path)
-    assert list(combined["participant_id"]) == ["001", "002", "003", "009", "PHE001", "PHE003"]
+    assert list(combined["participant_id"]) == ["001", "002", "003", "009"]
     assert set(combined["timepoint"]) == {"baseline"}
     row1 = combined.set_index("participant_id").loc["001"]
     assert row1["csf_il6"] == 3.1 and row1["hippo"] == 4000
@@ -55,3 +55,11 @@ def test_qc_report_flags_problems(tmp_path):
     assert "**mri**: ABC" in report                 # unparseable ID
     assert "002, baseline" in report                # duplicate key in csf
     assert "1 not in roster (009)" in report        # unmatched participant
+
+
+def test_second_table_and_transforms(tmp_path):
+    combined, *_ = run(tmp_path)
+    assert combined.set_index("participant_id").loc["002", "sex"] == "female"
+    phenom = pd.read_csv(tmp_path / "out" / "phenom.csv", dtype={"participant_id": str})
+    assert list(phenom["participant_id"]) == ["PHE001", "PHE003"]
+    assert phenom["hippo"].tolist() == [4.0, 3.9]

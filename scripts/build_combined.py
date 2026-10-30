@@ -7,7 +7,8 @@ config/sources.yaml. A source whose ID or timepoint rule is still "TODO" is
 skipped and listed in the QC report, so the script never guesses a rule.
 
 Outputs:
-  <out-dir>/combined.csv          composite table (git-ignored, holds data)
+  <out-dir>/<table>.csv           one merged table per `table` in the config
+                                  (default "combined"; git-ignored, holds data)
   docs/data_dictionary.csv        one row per variable: source file, sheet,
                                   original column, rename
   docs/merge_qc_report.md         per-source counts, unmatched IDs, duplicate
@@ -32,6 +33,7 @@ import yaml
 REPO = Path(__file__).resolve().parent.parent
 PID, TP = "participant_id", "timepoint"
 TODO = "TODO"
+DEFAULT_TABLE = "combined"
 
 
 # ---------------------------------------------------------------- config ---
@@ -153,6 +155,14 @@ def prepare(src: dict, cfg: dict, data_dir: Path):
     prefix = src.get("prefix", "") or ""
 
     values = df[[c for c in df.columns if c not in drop]].copy()
+    transforms = {}
+    for c, mapping in (src.get("recode") or {}).items():
+        lookup = {str(k): v for k, v in mapping.items()}
+        values[c] = values[c].map(lambda v: lookup.get(str(v).removesuffix(".0"), v) if pd.notna(v) else v)
+        transforms[c] = "recoded " + ", ".join(f"{k}->{v}" for k, v in mapping.items())
+    for c, factor in (src.get("scale") or {}).items():
+        values[c] = pd.to_numeric(values[c], errors="coerce") * factor
+        transforms[c] = f"multiplied by {factor}"
     dict_rows = []
     new_cols = []
     for c in values.columns:
@@ -166,6 +176,7 @@ def prepare(src: dict, cfg: dict, data_dir: Path):
             "original_column": c,
             "renamed": new != c,
             "rename_reason": "explicit rename" if c in rename else ("prefix" if prefix else ""),
+            "transform": transforms.get(c, ""),
         })
     values.columns = new_cols
     values.insert(0, TP, tps.values)
@@ -188,12 +199,12 @@ def prepare(src: dict, cfg: dict, data_dir: Path):
     return values.set_index([PID, TP]), dict_rows, res
 
 
-def merge_all(cfg: dict, data_dir: Path):
+def merge_all(cfg: dict, data_dir: Path, sources: list[dict]):
     combined = None
     dictionary, results, conflicts = [], [], []
     owner = {}  # output column -> source that supplied it first
 
-    for src in cfg["sources"]:
+    for src in sources:
         if not src.get("include", True):
             results.append(SourceResult(src["name"], "excluded", note=src.get("exclude_reason", "include: false")))
             continue
@@ -216,7 +227,7 @@ def merge_all(cfg: dict, data_dir: Path):
             differ = both[both[f"{c}_a"].astype(str) != both[f"{c}_b"].astype(str)]
             for (pid, tp), row in differ.iterrows():
                 conflicts.append({
-                    PID: pid, TP: tp, "variable": c,
+                    "table": src.get("table", DEFAULT_TABLE), PID: pid, TP: tp, "variable": c,
                     "kept_source": owner[c], "kept_value": row[f"{c}_a"],
                     "other_source": src["name"], "other_value": row[f"{c}_b"],
                 })
@@ -243,10 +254,13 @@ def fmt_list(items, limit=40) -> str:
     return shown + (f"; … ({len(items) - limit} more)" if len(items) > limit else "")
 
 
-def write_qc(path: Path, cfg, combined, results, conflicts, dictionary):
-    roster_name = cfg.get("roster")
-    roster = next((r.ids for r in results if r.name == roster_name and r.status == "merged"), None)
-    merged = [r for r in results if r.status == "merged"]
+def roster_for(cfg: dict, table: str):
+    """`roster` is one source name, or a {table: source name} mapping."""
+    roster = cfg.get("roster")
+    return roster.get(table) if isinstance(roster, dict) else roster
+
+
+def write_qc(path: Path, cfg, tables: dict, results, conflicts, dictionary):
     lines = [
         "# Merge QC report",
         "",
@@ -255,14 +269,15 @@ def write_qc(path: Path, cfg, combined, results, conflicts, dictionary):
         "## Summary",
         "",
     ]
-    if combined is None:
+    if not tables:
         lines.append("No source was merged, because every source is still waiting for confirmed linking rules or is excluded.")
-    else:
+    for table, (combined, tresults) in tables.items():
         lines.append(
-            f"The combined table has {len(combined)} participant-timepoint rows, "
+            f"- `{table}.csv`: {len(combined)} participant-timepoint rows, "
             f"{combined[PID].nunique()} participants and {combined.shape[1] - 2} variables "
-            f"from {len(merged)} sources."
+            f"from {sum(r.status == 'merged' for r in tresults)} sources."
         )
+    merged = [r for r in results if r.status == "merged"]
     lines += ["", "## Sources", "", "| Source | Status | Rows read | Rows kept | Participants | Note |", "|---|---|---|---|---|---|"]
     for r in results:
         lines.append(f"| {r.name} | {r.status} | {r.rows_read or ''} | {r.rows_kept or ''} | {len(r.ids) or ''} | {r.note} |")
@@ -273,13 +288,18 @@ def write_qc(path: Path, cfg, combined, results, conflicts, dictionary):
     lines += [f"- **{r.name}**: {fmt_list(r.unmapped_timepoints)}" for r in merged if r.unmapped_timepoints] or ["None."]
 
     lines += ["", "## Unmatched participants", ""]
-    if roster is None:
-        lines.append("No roster source is set (`roster` in config/sources.yaml), so unmatched IDs are not checked yet.")
-    else:
-        lines.append(f"Checked against the roster source `{roster_name}` ({len(roster)} participants).")
+    if not tables:
+        lines.append("Not checked, because nothing was merged.")
+    for table, (_, tresults) in tables.items():
+        roster_name = roster_for(cfg, table)
+        roster = next((r.ids for r in tresults if r.name == roster_name and r.status == "merged"), None)
+        if roster is None:
+            lines.append(f"`{table}`: no roster source is set (`roster` in config/sources.yaml), so unmatched IDs are not checked.")
+            continue
+        lines.append(f"`{table}`, checked against the roster source `{roster_name}` ({len(roster)} participants):")
         lines.append("")
-        for r in merged:
-            if r.name == roster_name:
+        for r in tresults:
+            if r.name == roster_name or r.status != "merged":
                 continue
             extra, absent = sorted(r.ids - roster), sorted(roster - r.ids)
             lines.append(f"- **{r.name}**: {len(extra)} not in roster ({fmt_list(extra)}); {len(absent)} roster participants missing ({fmt_list(absent)}).")
@@ -292,9 +312,9 @@ def write_qc(path: Path, cfg, combined, results, conflicts, dictionary):
         lines.append("None. No variable was supplied by more than one source with different values.")
     else:
         lines.append(f"{len(conflicts)} cells differ between sources. The earlier source in the config was kept.")
-        lines += ["", f"| {PID} | {TP} | variable | kept source | kept | other source | other |", "|---|---|---|---|---|---|---|"]
+        lines += ["", f"| table | {PID} | {TP} | variable | kept source | kept | other source | other |", "|---|---|---|---|---|---|---|---|"]
         for c in conflicts[:200]:
-            lines.append(f"| {c[PID]} | {c[TP]} | {c['variable']} | {c['kept_source']} | {c['kept_value']} | {c['other_source']} | {c['other_value']} |")
+            lines.append(f"| {c['table']} | {c[PID]} | {c[TP]} | {c['variable']} | {c['kept_source']} | {c['kept_value']} | {c['other_source']} | {c['other_value']} |")
         if len(conflicts) > 200:
             lines.append(f"\n{len(conflicts) - 200} more conflicts are in the output folder's conflicts.csv.")
 
@@ -318,17 +338,28 @@ def main(argv=None) -> int:
     if not data_dir.is_dir():
         sys.exit(f"data folder not found: {data_dir}")
 
-    combined, dictionary, results, conflicts = merge_all(cfg, data_dir)
+    # Sources with a different `table` (e.g. a second cohort) go to their own output table.
+    groups: dict[str, list] = {}
+    for src in cfg["sources"]:
+        groups.setdefault(src.get("table", DEFAULT_TABLE), []).append(src)
+    tables, dictionary, results, conflicts = {}, [], [], []
+    for table, sources in groups.items():
+        combined, d, r, c = merge_all(cfg, data_dir, sources)
+        dictionary += [{"table": table, **row} for row in d]
+        results += r
+        conflicts += c
+        if combined is not None:
+            tables[table] = (combined, r)
 
     args.out_dir.mkdir(parents=True, exist_ok=True)
     args.docs_dir.mkdir(parents=True, exist_ok=True)
-    if combined is not None:
-        combined.to_csv(args.out_dir / "combined.csv", index=False)
-    pd.DataFrame(conflicts, columns=[PID, TP, "variable", "kept_source", "kept_value", "other_source", "other_value"]).to_csv(
+    for table, (combined, _) in tables.items():
+        combined.to_csv(args.out_dir / f"{table}.csv", index=False)
+    pd.DataFrame(conflicts, columns=["table", PID, TP, "variable", "kept_source", "kept_value", "other_source", "other_value"]).to_csv(
         args.out_dir / "conflicts.csv", index=False)
-    pd.DataFrame(dictionary, columns=["variable", "source", "file", "sheet", "original_column", "renamed", "rename_reason"]).to_csv(
+    pd.DataFrame(dictionary, columns=["table", "variable", "source", "file", "sheet", "original_column", "renamed", "rename_reason", "transform"]).to_csv(
         args.docs_dir / "data_dictionary.csv", index=False)
-    write_qc(args.docs_dir / "merge_qc_report.md", cfg, combined, results, conflicts, dictionary)
+    write_qc(args.docs_dir / "merge_qc_report.md", cfg, tables, results, conflicts, dictionary)
 
     for r in results:
         print(f"{r.status:15} {r.name}  {r.note}")

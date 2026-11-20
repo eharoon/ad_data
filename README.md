@@ -26,11 +26,16 @@ Data and analyses for the Alzheimer's disease (AD) line of work in the Emory Beh
 
 Some columns are held back until open data problems are resolved: the two ReHo cluster columns (labels may be swapped), two mislabeled ODI columns, and CSF albumin (shifted IDs). `config/sources.yaml` explains each one.
 
+### Reference (master) file
+
+`dat_harmonized.csv` (in `!ADgrant/R/ADMs`, written by `harmonize_data.qmd`) is the master analysis file and the provenance reference. When it is passed with `--reference`, the merge is checked against it column by column in `docs/reference_check.md`. The data dictionary's `reference_column` field also records which master column each merged variable corresponds to.
+
 ### Running it
 
 ```
 pip install -r requirements.txt
-python scripts/build_combined.py --data-dir /path/to/01_Comb_folder
+python scripts/build_combined.py --data-dir /path/to/01_Comb_folder \
+    --reference "/path/to/!ADgrant/R/ADMs/dat_harmonized.csv"
 python -m pytest tests
 ```
 

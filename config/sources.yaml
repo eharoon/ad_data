@@ -45,6 +45,59 @@ withhold_values: "dob|date"
 single_visit: true
 id_format: "MIDL{:03d}"
 
+# Reference (master) analysis file. Ebrahim keeps dat_harmonized.csv
+# (!ADgrant/R/ADMs, written by harmonize_data.qmd) as the provenance file.
+# Pass it with --reference; the merge is then checked against it column by
+# column (docs/reference_check.md), and the data dictionary records which
+# reference column each merged variable corresponds to.
+reference:
+  label: "!ADgrant/R/ADMs/dat_harmonized.csv"
+  id_column: id
+  cohort_column: study
+  cohorts:
+    Phenom: {table: phenom, id_format: "PHE{:03d}", match_same_names: true}
+    Mlife:
+      table: combined
+      id_format: "MIDL{:03d}"
+      columns:        # reference column: merged variable (Midlife names differ)
+        pnfl: p_nfl_pgml
+        pgfap: p_gfap_pgml
+        pa42: p_ab42_pgml
+        pa40: p_ab40_pgml
+        ptau: p_ptau181_pgml
+        pbdnf: p_bdnf_pgml
+        cnfl: c_nfl_pgml
+        cgfap: c_gfap_pgml
+        ca42: c_ab42_pgml
+        ca40: c_ab40_pgml
+        ctau: c_ptau181_pgml
+        cbdnf: c_bdnf_pgml
+        pcrp: p_hscrp_mgl
+        ptnf: p_tnf_pgml
+        pil1b: p_il1b_pgml
+        pil6: p_il6_pgml
+        pmcp: p_mcp1_rep1_pgml
+        pil6sr: p_il6sr_rep2_pgml
+        pil1ra: p_il1ra_rep2_pgml
+        ptnfr2: p_tnfr2_pgml
+        ccrp: c_hscrp_pgml
+        ctnf: c_tnf_pgml
+        cil1b: c_il1b_pgml
+        cil6: c_il6_pgml
+        cmcp: c_mcp1_pgml
+        cil6sr: c_il6sr_pgml
+        cil1ra: c_il1ra_pgml
+        ctnfr2: c_tnfr2_pgml
+        age: age_exact
+        subgrp: group
+        bmi: bmi
+        INS: INS
+        GLU: GLU
+        Leptin: Leptin
+        hsCRP: p_hscrp_mgl
+        screeningCRP: screening_crp_mgl
+        tg_hdl: tg_hdl_ratio
+
 roster:
   combined: demographics        # all 92 enrolled Midlife records
   phenom: phenom_with_metabolics
@@ -127,9 +180,9 @@ sources:
     file: "!CSFImm_Source.xlsx"
     id_column: "Assay/ Patient ID"
     id_rule: {type: regex, pattern: "M(\\d+)"}
-    drop_columns: ["hsCRP (pg/ml)"]   # same value as the mg/L column, in another unit
     rename:
       "hsCRP (mg/l)": c_hscrp_mgl
+      "hsCRP (pg/ml)": c_hscrp_pgml   # same value in pg/mL; dat_harmonized uses this unit
       "TNF-alpha (pg/ml)": c_tnf_pgml
       "IL-1beta (pg/ml)": c_il1b_pgml
       "IL6 (pg/ml)": c_il6_pgml

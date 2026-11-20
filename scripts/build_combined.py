@@ -344,12 +344,72 @@ def write_qc(path: Path, cfg, tables: dict, results, conflicts, dictionary):
     path.write_text("\n".join(lines) + "\n")
 
 
+def check_reference(cfg: dict, tables: dict, path: Path):
+    """Compare merged values with the reference (master) analysis file.
+
+    Returns one row per (reference column, merged variable) pair with counts
+    only, so the committed report holds no participant values.
+    """
+    ref_cfg = cfg["reference"]
+    ref = pd.read_csv(path, dtype=object)
+    cohort = ref[ref_cfg["cohort_column"]]
+    rows, missing = [], []
+    for name, spec in ref_cfg["cohorts"].items():
+        if spec["table"] not in tables:
+            continue
+        merged = tables[spec["table"]][0].set_index(PID)
+        part = ref[cohort == name].copy()
+        part.index = part[ref_cfg["id_column"]].map(lambda v: spec["id_format"].format(int(float(v))))
+        missing += [(name, k) for k in part.index if k not in merged.index]
+        pairs = dict(spec.get("columns", {}))
+        if spec.get("match_same_names"):
+            pairs.update({c: c for c in part.columns if c in merged.columns and c not in pairs})
+        for ref_col, var in pairs.items():
+            if ref_col not in part.columns or var not in merged.columns:
+                rows.append({"cohort": name, "reference_column": ref_col, "variable": var, "status": "column missing"})
+                continue
+            a = pd.to_numeric(part[ref_col], errors="coerce")
+            b = pd.to_numeric(merged[var].reindex(part.index), errors="coerce")
+            both = a.notna() & b.notna()
+            agree = same_values(a[both], b[both])
+            rows.append({
+                "cohort": name, "reference_column": ref_col, "variable": var,
+                "status": "agrees" if agree.all() else "differs",
+                "n_compared": int(both.sum()), "n_differ": int((~agree).sum()),
+                "only_reference": int((a.notna() & b.isna()).sum()),
+                "only_merge": int((a.isna() & b.notna()).sum()),
+            })
+    return rows, missing
+
+
+def write_reference_report(path: Path, cfg, ref_path: Path, rows, missing):
+    lines = [
+        "# Agreement with the reference file",
+        "",
+        f"Reference (master) file: `{cfg['reference'].get('label', ref_path.name)}`. "
+        "Each row compares a reference column with the merged variable it corresponds to, "
+        "matched on subject_key. Counts only; values are in the git-ignored outputs.",
+        "",
+    ]
+    if missing:
+        lines += [f"Reference participants absent from the merge: {fmt_list([f'{c} {k}' for c, k in missing])}.", ""]
+    differ = [r for r in rows if r["status"] != "agrees"]
+    lines += [f"{len(rows) - len(differ)} of {len(rows)} column pairs agree on every participant both files hold.", ""]
+    lines += ["| cohort | reference column | merged variable | status | compared | differ | only in reference | only in merge |",
+              "|---|---|---|---|---|---|---|---|"]
+    for r in sorted(rows, key=lambda r: (r["status"] == "agrees", r["cohort"], r["reference_column"])):
+        lines.append(f"| {r['cohort']} | {r['reference_column']} | {r['variable']} | {r['status']} | "
+                     f"{r.get('n_compared', '')} | {r.get('n_differ', '')} | {r.get('only_reference', '')} | {r.get('only_merge', '')} |")
+    path.write_text("\n".join(lines) + "\n")
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--config", type=Path, default=REPO / "config" / "sources.yaml")
     ap.add_argument("--data-dir", type=Path, help="folder holding the raw source files (overrides config data_dir)")
     ap.add_argument("--out-dir", type=Path, default=REPO / "output")
     ap.add_argument("--docs-dir", type=Path, default=REPO / "docs")
+    ap.add_argument("--reference", type=Path, help="reference (master) analysis file to check the merge against")
     args = ap.parse_args(argv)
 
     cfg = load_config(args.config)
@@ -381,7 +441,14 @@ def main(argv=None) -> int:
         finish(combined).to_csv(args.out_dir / f"{table}.csv", index=False)
     finish(pd.DataFrame(conflicts, columns=["table", PID, TP, "variable", "kept_source", "kept_value", "other_source", "other_value"])).to_csv(
         args.out_dir / "conflicts.csv", index=False)
-    pd.DataFrame(dictionary, columns=["table", "variable", "source", "file", "sheet", "original_column", "renamed", "rename_reason", "transform"]).to_csv(
+    if args.reference and cfg.get("reference"):
+        ref_rows, ref_missing = check_reference(cfg, tables, args.reference)
+        write_reference_report(args.docs_dir / "reference_check.md", cfg, args.reference, ref_rows, ref_missing)
+        # Provenance: record which reference column each merged variable corresponds to.
+        ref_of = {(r["variable"], cfg["reference"]["cohorts"][r["cohort"]]["table"]): r["reference_column"] for r in ref_rows}
+        for row in dictionary:
+            row["reference_column"] = ref_of.get((row["variable"], row["table"]), "")
+    pd.DataFrame(dictionary, columns=["table", "variable", "source", "file", "sheet", "original_column", "renamed", "rename_reason", "transform", "reference_column"]).to_csv(
         args.docs_dir / "data_dictionary.csv", index=False)
     write_qc(args.docs_dir / "merge_qc_report.md", cfg, tables, results, conflicts, dictionary)
 

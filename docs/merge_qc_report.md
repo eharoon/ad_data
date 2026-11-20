@@ -1,10 +1,10 @@
 # Merge QC report
 
-Generated 2026-11-20 20:43 UTC by `scripts/build_combined.py`.
+Generated 2026-11-20 20:52 UTC by `scripts/build_combined.py`.
 
 ## Summary
 
-- `combined.csv`: 92 rows, 92 participants and 1098 variables from 30 sources.
+- `combined.csv`: 92 rows, 92 participants and 1099 variables from 30 sources.
 - `phenom.csv`: 98 rows, 98 participants and 2002 variables from 3 sources.
 
 ## Sources

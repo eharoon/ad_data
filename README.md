@@ -30,6 +30,10 @@ Some columns are held back until open data problems are resolved: the two ReHo c
 
 `dat_harmonized.csv` (in `!ADgrant/R/ADMs`, written by `harmonize_data.qmd`) is the master analysis file and the provenance reference. When it is passed with `--reference`, the merge is checked against it column by column in `docs/reference_check.md`. The data dictionary's `reference_column` field also records which master column each merged variable corresponds to.
 
+### Combined master (dat_combined.csv)
+
+`dat_harmonized.csv` is the single master and stays unchanged. `scripts/build_master_combined.py` writes a second master, `dat_combined.csv`, which adds Midlife plasma albumin, CSF albumin and QAlb from `QAlbumin_discovery_values_2026-11-12.csv`. It also writes `dat_combined_provenance.md`, which records the SHA-256 of both inputs. The script stops if the master's hash differs from the confirmed version, or if any Midlife albumin row disagrees with the master on age or group.
+
 ### Running it
 
 ```

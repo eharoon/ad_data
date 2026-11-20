@@ -1,167 +1,264 @@
 # Linking rules for scripts/build_combined.py.
 #
-# STATUS: scaffold. The file, sheet, header row and ID column below describe
-# what each file contains. The rules that decide how files link (id_format,
-# each source's id_rule and timepoint, renames, roster, and which overlapping
-# files to keep) are "TODO" until Ebrahim confirms them from the source-data
-# inventory. A source with a TODO rule is skipped and listed in the QC report.
+# STATUS: confirmed by Ebrahim on 2026-11-20 (the proposed rules in the
+# source-data inventory, PR #2 docs/INVENTORY.md). In short:
+#   - Key: subject_key = MIDL### (Midlife) or PHE### (Phenom). The cohorts
+#     reuse the numbers 1-92, so the prefix is part of the key.
+#   - One visit per participant, so there is no timepoint key.
+#   - Midlife goes to combined.csv; Phenom goes to its own phenom.csv.
+#   - Conflicts: sources are listed in priority order. REDCap comes first for
+#     demographics and group; the original lab or scanner file comes before
+#     derived analysis files for biomarker and imaging values.
+#   - Sex is coded 1 = male, 2 = female; group 0 = control, 1 = depressed.
+#
+# Held back until the open data problems are resolved (see INVENTORY.md):
+#   - rehocomb a42ReHo / pgfReHo (labels may be swapped; gReHo is kept)
+#   - 20230406_ctnfr2_dti cs16LFAoodi / cs16LFAiodi (copies of FISO columns)
+#   - alb_phenom CSF albumin (day-3 IDs shifted by one row; plasma albumin kept)
+#   - plasma immune replicates: both replicates are kept as they are; no mean
+#     is computed until the replicate-2-versus-mean question is decided.
 #
 # Per-source fields
 #   name          short label, used in the dictionary and QC report
 #   file, sheet   location inside data_dir; header_row is 0-based
 #   id_column     column holding the participant ID as written in this file
 #   id_format     optional per-source override of the global id_format
-#   id_rule       how the raw ID becomes the canonical participant_id:
+#   id_rule       how the raw ID becomes the canonical key:
 #                   {type: as_is}                              use the value (numeric IDs are formatted with id_format)
 #                   {type: regex, pattern: "M(\\d+)", group: 1} extract the number, then apply id_format
 #                   {type: crosswalk, file:, sheet:, from:, to:} look the raw ID up in a linking table
-#   timepoint     a fixed label (e.g. "baseline") or {column: <col>, map: {raw: label}}
+#   timepoint     ignored when single_visit is true
 #   prefix        prepended to every variable name from this source
 #   rename        {original column: new name}; overrides prefix for that column
 #   drop_columns  columns not carried into the combined table
-#   table         output table name (default "combined"); a second cohort can go to its own table
-#   recode        {column: {raw value: new value}}, e.g. to align sex codings
+#   table         output table name (default "combined")
+#   recode        {column: {raw value: new value}}
 #   scale         {column: factor}, e.g. 1000 to turn ng/mL into pg/mL
 #   on_duplicate  "error" (default: skip the source) or "first" (keep first row per key)
 #   include       false leaves the source out entirely
 
 data_dir: ../../01_Comb_folder   # relative to this file; override with --data-dir
 
-# Python format string applied to the integer participant number, e.g.
-# "MIDL{:03d}" -> MIDL007. A source can override it with its own id_format
-# (e.g. a second cohort keyed PHE###).
-id_format: TODO
+key_name: subject_key
+# Variables whose conflicting values are not printed in the committed QC report.
+withhold_values: "dob|date"
+single_visit: true
+id_format: "MIDL{:03d}"
 
-# Source whose participants define the roster for the unmatched-ID check:
-# one source name, or {table: source name} when there is more than one table.
-roster: TODO
+roster:
+  combined: demographics        # all 92 enrolled Midlife records
+  phenom: phenom_with_metabolics
 
 sources:
-  # ---- Clinical / REDCap -------------------------------------------------
-  - name: demographics_master
+  # ======================= Midlife (combined.csv) ===========================
+
+  # ---- Clinical / REDCap (highest priority for demographics and group) ----
+  - name: demographics_master    # curated demographics; records 1-90
     file: demographics_master.xlsx
     id_column: record_id
-    id_rule: TODO
-    timepoint: TODO            # redcap_event_name holds screening_visit_arm_1
-    drop_columns: [redcap_event_name]
+    id_rule: {type: as_is}
+    drop_columns: [redcap_event_name, record_id_13f0fc]
+    rename:
+      gender: sex
+      group_control_depressed: group
+      cage: age_exact
+      DNC: dnc_flag
 
-  - name: demographics
+  - name: demographics           # full REDCap demographics form; records 1-92
     file: demographics.xlsx
     id_column: record_id
-    id_rule: TODO
-    timepoint: TODO
-    drop_columns: [redcap_event_name]
-    # Overlaps demographics_master; the inventory decides which one is kept.
+    id_rule: {type: as_is}
+    drop_columns: [redcap_event_name, record_id_13f0fc]
+    rename: {gender: sex}
 
-  - name: redcap_mrs_study
+  - name: redcap_ids_sr
     file: MRSInMidlifeDepressi.xlsx
     id_column: record_id
-    id_rule: TODO
-    timepoint: TODO            # redcap_event_name holds visit_1_scanning_arm_1
+    id_rule: {type: as_is}
     drop_columns: [redcap_event_name]
 
-  - name: metabolic_markers
-    file: Midlife_metabolic_markers_07.16.26.xlsx
-    sheet: "Midlife_Behavior, Plasma data_0"
-    header_row: 1              # row 0 is a banner ("In Red = suggested variables")
-    id_column: record_id       # file also has unique_id (MIDL01 style)
-    id_rule: TODO
-    timepoint: TODO
-
-  - name: albumin              # Phenom cohort (PHE### IDs); draft inventory flags a day-3 ID shift
-    file: alb_phenom.xlsx
-    id_column: "subject_id inpatient_day_2_arm_1"   # a second ID column holds day 3 (CSF) IDs
-    id_rule: TODO
-    timepoint: TODO
-
-  - name: cantab_session
-    file: RowBySession_Midlife.csv
-    id_column: Subject ID
-    id_rule: TODO
-    timepoint: TODO            # Visit Identifier / Visit Name
-
-  # ---- Fluid biomarkers --------------------------------------------------
+  # ---- Fluid biomarkers: original lab files ------------------------------
   - name: ad_plasma
     file: "!ADsource.xlsx"
     sheet: plasma
     id_column: Haroon ID
-    id_rule: TODO
-    timepoint: TODO
-    prefix: plasma_
-    drop_columns: [Quanterix plate layout]
+    id_rule: {type: as_is}
+    rename:
+      "PNFL-light (pg/mL(": p_nfl_pgml
+      "P GFAP (pg/mL  )": p_gfap_pgml
+      "P Abeta-42 (pg/mL )": p_ab42_pgml
+      "P Abeta-40 (pg/mL)": p_ab40_pgml
+      "P  pTau 181 (pg/mL )": p_ptau181_pgml
+      "P BDNF (pg/mL )": p_bdnf_pgml
+      "Quanterix plate layout": p_ad_plate_position
 
   - name: ad_csf
     file: "!ADsource.xlsx"
     sheet: CSF
     id_column: Haroon ID
-    id_rule: TODO
-    timepoint: TODO
-    prefix: csf_
-    drop_columns: [Quanterix plate layout]
+    id_rule: {type: as_is}
+    rename:
+      "c NFL-light (pg/mL)": c_nfl_pgml
+      "c GFAP (pg/mL)": c_gfap_pgml
+      "c Abeta-42 (pg/mL )": c_ab42_pgml
+      "c Abeta-40 (pg/mL )": c_ab40_pgml
+      "c pTau 181 (pg/mL)": c_ptau181_pgml
+      "c BDNF (pg/mL)": c_bdnf_pgml
+      "Quanterix plate layout": c_ad_plate_position
 
   - name: plasma_immune
     file: "!PlasmaImm_Source.xlsx"
     id_column: "Assay/ Patient ID"
-    id_rule: TODO
-    timepoint: TODO
-    prefix: plasma_
+    id_rule: {type: regex, pattern: "M(\\d+)"}
+    rename:
+      "hsCRP (mg/l)": p_hscrp_mgl
+      "TNF-alpha (pg/ml)": p_tnf_pgml
+      "IL-1beta (pg/ml)": p_il1b_pgml
+      "IL6 (pg/ml)": p_il6_pgml
+      "MCP1_1 (pg/ml)": p_mcp1_rep1_pgml
+      "MCP1_2 (pg/ml)": p_mcp1_rep2_pgml
+      "IL6sr_1 (pg/ml)": p_il6sr_rep1_pgml
+      "IL6sr_2 (pg/ml)": p_il6sr_rep2_pgml
+      "IL-1ra_1 (pg/ml)": p_il1ra_rep1_pgml
+      "IL-1ra_2 (pg/ml)": p_il1ra_rep2_pgml
+      "TNF RII (pg/ml)": p_tnfr2_pgml
 
   - name: csf_immune
     file: "!CSFImm_Source.xlsx"
     id_column: "Assay/ Patient ID"
-    id_rule: TODO               # IDs look like M001
-    timepoint: TODO
-    prefix: csf_
+    id_rule: {type: regex, pattern: "M(\\d+)"}
+    drop_columns: ["hsCRP (pg/ml)"]   # same value as the mg/L column, in another unit
+    rename:
+      "hsCRP (mg/l)": c_hscrp_mgl
+      "TNF-alpha (pg/ml)": c_tnf_pgml
+      "IL-1beta (pg/ml)": c_il1b_pgml
+      "IL6 (pg/ml)": c_il6_pgml
+      "MCP1 (pg/ml)": c_mcp1_pgml
+      "IL6sr (pg/ml)": c_il6sr_pgml
+      "IL-1ra (pg/ml)": c_il1ra_pgml
+      "TNF RII (pg/ml)": c_tnfr2_pgml
 
-  # ---- MRS -----------------------------------------------------------------
-  - {name: mrs_acc,     file: MidLife-ACC-MRS-single-voxel.csv,     id_column: SubjID, id_rule: TODO, timepoint: TODO}
-  - {name: mrs_pcc,     file: MidLife-PCC-MRS-single-voxel.csv,     id_column: SubjID, id_rule: TODO, timepoint: TODO}
-  - {name: mrs_l_basal, file: MidLife-L_Basal-MRS-single-voxel.csv, id_column: SubjID, id_rule: TODO, timepoint: TODO}
-  - {name: mrs_r_basal, file: MidLife-R_Basal-MRS-single-voxel.csv, id_column: SubjID, id_rule: TODO, timepoint: TODO}
+  # ---- Analysis-ready metabolic file (after REDCap and the lab files) -----
+  # Its immune columns are renamed onto the lab-file names so the merge checks
+  # that they agree; the lab file wins any disagreement.
+  - name: metabolic_markers
+    file: Midlife_metabolic_markers_07.16.26.xlsx
+    sheet: "Midlife_Behavior, Plasma data_0"
+    header_row: 1                # row 0 holds section labels
+    id_column: unique_id         # MIDL##; record_id is blank on 7 rows
+    id_rule: {type: regex, pattern: "MIDL(\\d+)"}
+    drop_columns: [record_id]
+    recode: {sex: {0: 1, 1: 2}}  # file codes 0 = male, 1 = female
+    scale: {tnfrii: 1000, il6sr: 1000, il1ra: 1000}   # ng/mL -> pg/mL
+    rename:
+      group_control_depressed: group
+      educ: education_years
+      hsCRP: p_hscrp_mgl
+      screeningCRP: screening_crp_mgl
+      il6: p_il6_pgml
+      tnf: p_tnf_pgml
+      il1beta: p_il1b_pgml
+      tnfrii: p_tnfr2_pgml
+      il6sr: p_il6sr_rep2_pgml
+      il1ra: p_il1ra_rep2_pgml
+      mcp1: p_mcp1_rep2_pgml
 
-  - name: phenom_master
-    file: Phenom_Master_F.xlsx
-    id_column: ID
-    id_rule: TODO
-    timepoint: TODO
-    # Phenom cohort; draft inventory proposes a separate table (table: phenom).
-    # ~1,850 columns. Draft inventory: separate Phenom cohort, not a copy of the Midlife MRS files.
+  # ---- Cognition (CANTAB) -------------------------------------------------
+  - name: cantab_session
+    file: RowBySession_Midlife.csv
+    id_column: Subject ID
+    id_rule: {type: as_is}
+    prefix: cantab_
+    drop_columns: [Row Number, Study, Site, Site Name, Visit Identifier, Visit Name]
+    recode: {Group: {"Healthy Volunteers": 0, "Depressed": 1}}
+    rename: {Gender: sex, Group: group, "Date of birth": cantab_dob}
 
-  - name: phenom_with_metabolics
-    file: phenom_with_metabolics.csv
-    id_column: id                # Phenom cohort (study = Phenom)
-    id_rule: TODO
-    timepoint: TODO
+  # ---- MRS ------------------------------------------------------------------
+  - {name: mrs_acc,     file: MidLife-ACC-MRS-single-voxel.csv,     id_column: SubjID, id_rule: {type: as_is}}
+  - {name: mrs_pcc,     file: MidLife-PCC-MRS-single-voxel.csv,     id_column: SubjID, id_rule: {type: as_is}}
+  - {name: mrs_l_basal, file: MidLife-L_Basal-MRS-single-voxel.csv, id_column: SubjID, id_rule: {type: as_is}}
+  - {name: mrs_r_basal, file: MidLife-R_Basal-MRS-single-voxel.csv, id_column: SubjID, id_rule: {type: as_is}}
 
   # ---- Structural MRI (FreeSurfer) ----------------------------------------
-  # The amygdala, hippocampus and thalamus files write IDs as MidLife_subj###.
-  - {name: lh_cortical_area,      file: lh_cortical_area.xlsx,      id_column: id, id_rule: TODO, timepoint: TODO}
-  - {name: rh_cortical_area,      file: rh_cortical_area.xlsx,      id_column: id, id_rule: TODO, timepoint: TODO}
-  - {name: lh_cortical_thickness, file: lh_cortical_thickness.xlsx, id_column: id, id_rule: TODO, timepoint: TODO}
-  - {name: rh_cortical_thickness, file: rh_cortical_thickness.xlsx, id_column: id, id_rule: TODO, timepoint: TODO}
-  - {name: lh_cortical_volume,    file: lh_cortical_volume.xlsx,    id_column: id, id_rule: TODO, timepoint: TODO}
-  - {name: rh_cortical_volume,    file: rh_cortical_volume.xlsx,    id_column: id, id_rule: TODO, timepoint: TODO}
-  - {name: subcortical_volume,    file: subcortical_volume.xlsx,    id_column: id, id_rule: TODO, timepoint: TODO}
-  - {name: hippo_lh,    file: MidLife-hipposubfields.lh-v22.xlsx,    id_column: SubjID, id_rule: TODO, timepoint: TODO, prefix: lh_hippo_}
-  - {name: hippo_rh,    file: MidLife-hipposubfields.rh-v22.xlsx,    id_column: SubjID, id_rule: TODO, timepoint: TODO, prefix: rh_hippo_}
-  - {name: amygdala_lh, file: MidLife-amygdalar-nuclei.lh-v22.xlsx,  id_column: SubjID, id_rule: TODO, timepoint: TODO, prefix: lh_amyg_}
-  - {name: amygdala_rh, file: MidLife-amygdalar-nuclei.rh-v22.xlsx,  id_column: SubjID, id_rule: TODO, timepoint: TODO, prefix: rh_amyg_}
-  - {name: thalamus_lh, file: MidLife-thalamic-nuclei.lh-v13.xlsx,   id_column: SubjID, id_rule: TODO, timepoint: TODO, prefix: lh_thal_}
-  - {name: thalamus_rh, file: MidLife-thalamic-nuclei.rh-v13.xlsx,   id_column: SubjID, id_rule: TODO, timepoint: TODO, prefix: rh_thal_}
+  # eTIV and BrainSegVolNotVent appear in all seven files with identical
+  # values; renaming them to one name stores each once and checks agreement.
+  - &fs {name: lh_cortical_area, file: lh_cortical_area.xlsx, id_column: id, id_rule: {type: as_is},
+         rename: {eTIV: etiv, BrainSegVolNotVent: brainsegvolnotvent}}
+  - {<<: *fs, name: rh_cortical_area,      file: rh_cortical_area.xlsx}
+  - {<<: *fs, name: lh_cortical_thickness, file: lh_cortical_thickness.xlsx}
+  - {<<: *fs, name: rh_cortical_thickness, file: rh_cortical_thickness.xlsx}
+  - {<<: *fs, name: lh_cortical_volume,    file: lh_cortical_volume.xlsx}
+  - {<<: *fs, name: rh_cortical_volume,    file: rh_cortical_volume.xlsx}
+  - name: subcortical_volume
+    file: subcortical_volume.xlsx
+    id_column: id
+    id_rule: {type: as_is}
+    rename: {EstimatedTotalIntraCranialVol: etiv, BrainSegVolNotVent: brainsegvolnotvent}
+  # These six files write IDs as MidLife_subj###.
+  - &seg {name: hippo_lh, file: MidLife-hipposubfields.lh-v22.xlsx, id_column: SubjID,
+          id_rule: {type: regex, pattern: "MidLife_subj(\\d+)"}, prefix: lh_hippo_}
+  - {<<: *seg, name: hippo_rh,    file: MidLife-hipposubfields.rh-v22.xlsx,   prefix: rh_hippo_}
+  - {<<: *seg, name: amygdala_lh, file: MidLife-amygdalar-nuclei.lh-v22.xlsx, prefix: lh_amyg_}
+  - {<<: *seg, name: amygdala_rh, file: MidLife-amygdalar-nuclei.rh-v22.xlsx, prefix: rh_amyg_}
+  - {<<: *seg, name: thalamus_lh, file: MidLife-thalamic-nuclei.lh-v13.xlsx,  prefix: lh_thal_}
+  - {<<: *seg, name: thalamus_rh, file: MidLife-thalamic-nuclei.rh-v13.xlsx,  prefix: rh_thal_}
 
   # ---- Diffusion and resting-state MRI -----------------------------------
-  - {name: xtract,     file: midlife_xtract.xlsx,      id_column: SubjID, id_rule: TODO, timepoint: TODO}
-  - {name: dti_combined, file: dti_combined.xlsx,      id_column: SubjID, id_rule: TODO, timepoint: TODO, drop_columns: [SubjID2]}
-  - {name: dti_ctnfr2, file: dti_ctnfr2.xlsx,          id_column: SubjID, id_rule: TODO, timepoint: TODO}
-  # Draft inventory: some ODI columns here are copied values; not clean yet.
-  - {name: dti_ctnfr2_20230406, file: 20230406_ctnfr2_dti.xlsx, sheet: Sheet1, id_column: SubjID, id_rule: TODO, timepoint: TODO}
-  - {name: reho,       file: rehocomb.xlsx,            id_column: SubjID, id_rule: TODO, timepoint: TODO}
+  - {name: xtract, file: midlife_xtract.xlsx, id_column: SubjID, id_rule: {type: as_is}, prefix: xtract_}
+  - name: dti_combined
+    file: dti_combined.xlsx
+    id_column: SubjID
+    id_rule: {type: as_is}
+    prefix: dtic_
+    drop_columns: [SubjID2, SubjID3, SubjID4]   # repeated copies of SubjID
+  - name: dti_ctnfr2_20230406
+    file: 20230406_ctnfr2_dti.xlsx
+    sheet: Sheet1
+    id_column: SubjID
+    id_rule: {type: as_is}
+    drop_columns: [cs16LFAoodi, cs16LFAiodi]    # copies of cp3RAFofso / cp3RAFifso, not ODI
+  - name: reho
+    file: rehocomb.xlsx
+    id_column: SubjID
+    id_rule: {type: as_is}
+    drop_columns: [a42ReHo, pgfReHo]            # labels may be swapped; held until confirmed
 
-  # ---- Not participant-level tables (left out unless the inventory says otherwise)
-  - name: cantab_measure_long
-    file: RowByMeasure_Midlife.csv
-    include: false
-    exclude_reason: long format (one row per measure); needs a pivot rule
-  # Also not merged: Data_dictionary.xlsx and midlife_xtract_glossary.xlsx
-  # (documentation), RowBy*Norms_Midlife.csv (normed copies), booking.ics,
-  # and the roi*/midlife-*-correlation-*.xlsx files (analysis results, not data).
+  # ======================= Phenom (phenom.csv) ==============================
+  # Phenom_Master_F comes first: from PHE091 on, the metabolic panel in
+  # phenom_with_metabolics (CHOL, TG, HDLc, LDLc, non-HDLc, GLU, INS, Leptin,
+  # Adiponectin, Resistin, Osteopontin, NEFA, FolicAcid) sits one participant
+  # lower than in Phenom_Master_F (e.g. the 97 that Phenom_Master_F gives
+  # PHE091 appears at PHE094). The merge QC report lists every such cell.
+  - name: phenom_master
+    table: phenom
+    file: Phenom_Master_F.xlsx
+    id_column: ID
+    id_rule: {type: as_is}
+    id_format: "PHE{:03d}"
+
+  - name: phenom_with_metabolics
+    table: phenom
+    file: phenom_with_metabolics.csv
+    id_column: id
+    id_rule: {type: as_is}
+    id_format: "PHE{:03d}"
+
+  - name: albumin
+    table: phenom
+    file: alb_phenom.xlsx
+    id_column: "subject_id inpatient_day_2_arm_1"
+    id_rule: {type: regex, pattern: "PHE(\\d+)"}
+    id_format: "PHE{:03d}"
+    drop_columns: ["subject_id inpatient_day_3_arm_1", "csf_albumin_gdl inpatient_day_3_arm_1"]
+    rename: {"plasma_albumin_gdl inpatient_day_2_arm_1": p_albumin_gdl}
+
+  # ======================= Left out ==========================================
+  - {name: dti_ctnfr2, file: dti_ctnfr2.xlsx, include: false,
+     exclude_reason: "duplicates columns of 20230406_ctnfr2_dti"}
+  - {name: cantab_measure_long, file: RowByMeasure_Midlife.csv, include: false,
+     exclude_reason: "long format (one row per measure); RowBySession holds the summary scores"}
+  # Also not merged: !ADsource Sheet1/Sheet2 (copies of the plasma and CSF
+  # sheets), RowBy*Norms_Midlife.csv and subjects_Midlife.csv (copies of the
+  # CANTAB data), Data_dictionary.xlsx and midlife_xtract_glossary.xlsx
+  # (documentation), the roi* and midlife-*-correlation-* files (cluster means
+  # from earlier analyses, not source measurements), and booking.ics.

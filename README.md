@@ -16,6 +16,16 @@ Data and analyses for the Alzheimer's disease (AD) line of work in the Emory Beh
 | `docs/merge_qc_report.md` | Per-source counts, unmapped IDs, unmatched participants, duplicate keys, conflicting values |
 | `tests/` | Synthetic data that exercises the merge and QC checks |
 
+### Linking rules (confirmed 2026-11-20)
+
+- Each participant is identified by `subject_key`: `MIDL001`–`MIDL092` for the Midlife study and `PHE001`–`PHE115` for Phenom. The prefix is needed because both cohorts reuse the numbers 1–92. The seven ID formats found in the source files (`1`, `001`, `M001`, `MIDL01`, `MidLife_subj001`, Haroon ID, `PHE001`) all convert to this key.
+- Each cohort was seen once, so each table has one row per participant and no timepoint column.
+- Midlife goes to `output/combined.csv` and Phenom to `output/phenom.csv`.
+- Sources are listed in priority order. REDCap wins for demographics and group, and the original lab or scanner file wins over derived analysis files.
+- Sex is coded 1 = male, 2 = female, and group 0 = control, 1 = depressed.
+
+Some columns are held back until open data problems are resolved: the two ReHo cluster columns (labels may be swapped), two mislabeled ODI columns, and CSF albumin (shifted IDs). `config/sources.yaml` explains each one.
+
 ### Running it
 
 ```

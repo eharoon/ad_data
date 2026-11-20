@@ -54,7 +54,7 @@ def unresolved(src: dict, cfg: dict) -> list[str]:
         missing.append("id_format")
     if src.get("id_rule") in (None, TODO):
         missing.append("id_rule")
-    if src.get("timepoint") in (None, TODO):
+    if not cfg.get("single_visit") and src.get("timepoint") in (None, TODO):
         missing.append("timepoint")
     return missing
 
@@ -143,13 +143,15 @@ def prepare(src: dict, cfg: dict, data_dir: Path):
     crosswalk = load_crosswalk(src["id_rule"], data_dir)
     ids = df[src["id_column"]].map(lambda v: canonical_id(v, src["id_rule"], src.get("id_format", cfg["id_format"]), crosswalk))
     res.unparsed_ids = sorted({str(r) for r, i in zip(df[src["id_column"]], ids) if pd.isna(i) and pd.notna(r)})
-    tps = assign_timepoint(df, src["timepoint"])
-    if isinstance(src["timepoint"], dict):
-        res.unmapped_timepoints = sorted(set(df.loc[tps.isna(), src["timepoint"]["column"]].astype(str)))
+    # single_visit: one row per participant, so every source shares one blank timepoint.
+    tp_rule = "" if cfg.get("single_visit") else src["timepoint"]
+    tps = assign_timepoint(df, tp_rule)
+    if isinstance(tp_rule, dict):
+        res.unmapped_timepoints = sorted(set(df.loc[tps.isna(), tp_rule["column"]].astype(str)))
 
     key_cols = {src["id_column"]}
-    if isinstance(src["timepoint"], dict):
-        key_cols.add(src["timepoint"]["column"])
+    if isinstance(tp_rule, dict):
+        key_cols.add(tp_rule["column"])
     drop = set(src.get("drop_columns", [])) | key_cols
     rename = src.get("rename", {}) or {}
     prefix = src.get("prefix", "") or ""
@@ -199,6 +201,15 @@ def prepare(src: dict, cfg: dict, data_dir: Path):
     return values.set_index([PID, TP]), dict_rows, res
 
 
+def same_values(a: pd.Series, b: pd.Series) -> pd.Series:
+    """Compare numerically where both sides are numbers (ignoring float noise), else as text."""
+    na, nb = pd.to_numeric(a, errors="coerce"), pd.to_numeric(b, errors="coerce")
+    numeric = na.notna() & nb.notna()
+    close = (na - nb).abs() <= 1e-6 * nb.abs().clip(lower=1)
+    text = a.astype(str).str.strip() == b.astype(str).str.strip()
+    return (numeric & close) | (~numeric & text)
+
+
 def merge_all(cfg: dict, data_dir: Path, sources: list[dict]):
     combined = None
     dictionary, results, conflicts = [], [], []
@@ -224,7 +235,7 @@ def merge_all(cfg: dict, data_dir: Path, sources: list[dict]):
         overlap = [c for c in frame.columns if c in combined.columns]
         for c in overlap:
             both = combined[[c]].join(frame[[c]], how="inner", lsuffix="_a", rsuffix="_b").dropna()
-            differ = both[both[f"{c}_a"].astype(str) != both[f"{c}_b"].astype(str)]
+            differ = both[~same_values(both[f"{c}_a"], both[f"{c}_b"])]
             for (pid, tp), row in differ.iterrows():
                 conflicts.append({
                     "table": src.get("table", DEFAULT_TABLE), PID: pid, TP: tp, "variable": c,
@@ -273,7 +284,7 @@ def write_qc(path: Path, cfg, tables: dict, results, conflicts, dictionary):
         lines.append("No source was merged, because every source is still waiting for confirmed linking rules or is excluded.")
     for table, (combined, tresults) in tables.items():
         lines.append(
-            f"- `{table}.csv`: {len(combined)} participant-timepoint rows, "
+            f"- `{table}.csv`: {len(combined)} {'rows' if cfg.get('single_visit') else 'participant-timepoint rows'}, "
             f"{combined[PID].nunique()} participants and {combined.shape[1] - 2} variables "
             f"from {sum(r.status == 'merged' for r in tresults)} sources."
         )
@@ -304,7 +315,7 @@ def write_qc(path: Path, cfg, tables: dict, results, conflicts, dictionary):
             extra, absent = sorted(r.ids - roster), sorted(roster - r.ids)
             lines.append(f"- **{r.name}**: {len(extra)} not in roster ({fmt_list(extra)}); {len(absent)} roster participants missing ({fmt_list(absent)}).")
 
-    lines += ["", "## Duplicate participant-timepoint keys", ""]
+    lines += ["", "## Duplicate keys", ""]
     lines += [f"- **{r.name}**: {fmt_list(r.duplicate_keys)}" for r in results if r.duplicate_keys] or ["None."]
 
     lines += ["", "## Conflicting values", ""]
@@ -312,9 +323,17 @@ def write_qc(path: Path, cfg, tables: dict, results, conflicts, dictionary):
         lines.append("None. No variable was supplied by more than one source with different values.")
     else:
         lines.append(f"{len(conflicts)} cells differ between sources. The earlier source in the config was kept.")
-        lines += ["", f"| table | {PID} | {TP} | variable | kept source | kept | other source | other |", "|---|---|---|---|---|---|---|---|"]
+        cols = ["table", PID] + ([] if cfg.get("single_visit") else [TP]) + [
+            "variable", "kept_source", "kept_value", "other_source", "other_value"]
+        header = [cfg.get("key_name", PID) if c == PID else c for c in cols]
+        lines += ["", "| " + " | ".join(header) + " |", "|" + "---|" * len(cols)]
+        # Values of identifying variables (e.g. dates of birth) stay out of this
+        # committed report; they are in the git-ignored conflicts.csv.
+        withheld = re.compile(cfg.get("withhold_values", r"(?!)"))
         for c in conflicts[:200]:
-            lines.append(f"| {c['table']} | {c[PID]} | {c[TP]} | {c['variable']} | {c['kept_source']} | {c['kept_value']} | {c['other_source']} | {c['other_value']} |")
+            hide = bool(withheld.search(c["variable"]))
+            lines.append("| " + " | ".join(
+                "(withheld)" if hide and k.endswith("_value") else str(c[k]) for k in cols) + " |")
         if len(conflicts) > 200:
             lines.append(f"\n{len(conflicts) - 200} more conflicts are in the output folder's conflicts.csv.")
 
@@ -353,9 +372,14 @@ def main(argv=None) -> int:
 
     args.out_dir.mkdir(parents=True, exist_ok=True)
     args.docs_dir.mkdir(parents=True, exist_ok=True)
+    def finish(frame: pd.DataFrame) -> pd.DataFrame:
+        if cfg.get("single_visit"):
+            frame = frame.drop(columns=[TP])
+        return frame.rename(columns={PID: cfg.get("key_name", PID)})
+
     for table, (combined, _) in tables.items():
-        combined.to_csv(args.out_dir / f"{table}.csv", index=False)
-    pd.DataFrame(conflicts, columns=["table", PID, TP, "variable", "kept_source", "kept_value", "other_source", "other_value"]).to_csv(
+        finish(combined).to_csv(args.out_dir / f"{table}.csv", index=False)
+    finish(pd.DataFrame(conflicts, columns=["table", PID, TP, "variable", "kept_source", "kept_value", "other_source", "other_value"])).to_csv(
         args.out_dir / "conflicts.csv", index=False)
     pd.DataFrame(dictionary, columns=["table", "variable", "source", "file", "sheet", "original_column", "renamed", "rename_reason", "transform"]).to_csv(
         args.docs_dir / "data_dictionary.csv", index=False)

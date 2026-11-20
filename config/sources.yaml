@@ -277,24 +277,26 @@ sources:
     drop_columns: [a42ReHo, pgfReHo]            # labels may be swapped; held until confirmed
 
   # ======================= Phenom (phenom.csv) ==============================
-  # Phenom_Master_F comes first: from PHE091 on, the metabolic panel in
-  # phenom_with_metabolics (CHOL, TG, HDLc, LDLc, non-HDLc, GLU, INS, Leptin,
-  # Adiponectin, Resistin, Osteopontin, NEFA, FolicAcid) sits one participant
-  # lower than in Phenom_Master_F (e.g. the 97 that Phenom_Master_F gives
-  # PHE091 appears at PHE094). The merge QC report lists every such cell.
+  - name: phenom_with_metabolics   # same values as dat_harmonized (Phenom rows)
+    table: phenom
+    file: phenom_with_metabolics.csv
+    id_column: id
+    id_rule: {type: as_is}
+    id_format: "PHE{:03d}"
+
+  # In Phenom_Master_F the metabolic panel is attached one row too early from
+  # PHE090 on: the values belong to the next ID (e.g. the CHOL/TG at PHE090,
+  # an ID outside the analysed cohort, are PHE091's in dat_harmonized), while
+  # its demographic and clinical columns line up. Those columns are dropped
+  # here so they cannot fill gaps with another participant's values.
   - name: phenom_master
     table: phenom
     file: Phenom_Master_F.xlsx
     id_column: ID
     id_rule: {type: as_is}
     id_format: "PHE{:03d}"
-
-  - name: phenom_with_metabolics
-    table: phenom
-    file: phenom_with_metabolics.csv
-    id_column: id
-    id_rule: {type: as_is}
-    id_format: "PHE{:03d}"
+    drop_columns: [CHOL, TG, HDLc, LDLc, non-HDLc, GLU, INS, Leptin, Adiponectin,
+                   Resistin, Osteopontin, NEFA, FolicAcid]
 
   - name: albumin
     table: phenom

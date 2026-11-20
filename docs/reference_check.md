@@ -2,23 +2,12 @@
 
 Reference (master) file: `!ADgrant/R/ADMs/dat_harmonized.csv`. Each row compares a reference column with the merged variable it corresponds to, matched on subject_key. Counts only; values are in the git-ignored outputs.
 
-182 of 196 column pairs agree on every participant both files hold.
+193 of 196 column pairs agree on every participant both files hold.
 
 | cohort | reference column | merged variable | status | compared | differ | only in reference | only in merge |
 |---|---|---|---|---|---|---|---|
 | Mlife | bmi | bmi | differs | 79 | 45 | 0 | 0 |
-| Phenom | Adiponectin | Adiponectin | differs | 66 | 13 | 0 | 1 |
-| Phenom | CHOL | CHOL | differs | 66 | 13 | 0 | 1 |
-| Phenom | GLU | GLU | differs | 66 | 13 | 0 | 1 |
-| Phenom | HDLc | HDLc | differs | 66 | 13 | 0 | 1 |
-| Phenom | INS | INS | differs | 66 | 13 | 0 | 1 |
-| Phenom | LDLc | LDLc | differs | 66 | 12 | 0 | 1 |
-| Phenom | Leptin | Leptin | differs | 66 | 13 | 0 | 1 |
-| Phenom | NEFA | NEFA | differs | 66 | 13 | 0 | 1 |
-| Phenom | Osteopontin | Osteopontin | differs | 66 | 13 | 0 | 1 |
-| Phenom | Resistin | Resistin | differs | 66 | 14 | 0 | 1 |
-| Phenom | TG | TG | differs | 66 | 13 | 0 | 1 |
-| Phenom | hsCRP | hsCRP | differs | 66 | 31 | 0 | 6 |
+| Phenom | Resistin | Resistin | differs | 66 | 2 | 0 | 0 |
 | Phenom | tg_hdl | tg_hdl | differs | 66 | 2 | 0 | 0 |
 | Mlife | GLU | GLU | agrees | 79 | 0 | 0 | 0 |
 | Mlife | INS | INS | agrees | 79 | 0 | 0 | 0 |
@@ -57,8 +46,18 @@ Reference (master) file: `!ADgrant/R/ADMs/dat_harmonized.csv`. Each row compares
 | Mlife | subgrp | group | agrees | 79 | 0 | 0 | 0 |
 | Mlife | tg_hdl | tg_hdl_ratio | agrees | 79 | 0 | 0 | 0 |
 | Phenom | APOE_diplotype | APOE_diplotype | agrees | 0 | 0 | 0 | 0 |
+| Phenom | Adiponectin | Adiponectin | agrees | 66 | 0 | 0 | 0 |
+| Phenom | CHOL | CHOL | agrees | 66 | 0 | 0 | 0 |
 | Phenom | E4_risk | E4_risk | agrees | 0 | 0 | 0 | 0 |
+| Phenom | GLU | GLU | agrees | 66 | 0 | 0 | 0 |
+| Phenom | HDLc | HDLc | agrees | 66 | 0 | 0 | 0 |
+| Phenom | INS | INS | agrees | 66 | 0 | 0 | 0 |
 | Phenom | Insomnia | Insomnia | agrees | 72 | 0 | 0 | 0 |
+| Phenom | LDLc | LDLc | agrees | 66 | 0 | 0 | 0 |
+| Phenom | Leptin | Leptin | agrees | 66 | 0 | 0 | 0 |
+| Phenom | NEFA | NEFA | agrees | 66 | 0 | 0 | 0 |
+| Phenom | Osteopontin | Osteopontin | agrees | 66 | 0 | 0 | 0 |
+| Phenom | TG | TG | agrees | 66 | 0 | 0 | 0 |
 | Phenom | age | age | agrees | 72 | 0 | 0 | 0 |
 | Phenom | age Binned | age Binned | agrees | 72 | 0 | 0 | 0 |
 | Phenom | age2 | age2 | agrees | 72 | 0 | 0 | 0 |
@@ -119,6 +118,7 @@ Reference (master) file: `!ADgrant/R/ADMs/dat_harmonized.csv`. Each row compares
 | Phenom | gf | gf | agrees | 72 | 0 | 0 | 0 |
 | Phenom | hamd | hamd | agrees | 72 | 0 | 0 | 0 |
 | Phenom | hamdanx | hamdanx | agrees | 0 | 0 | 0 | 0 |
+| Phenom | hsCRP | hsCRP | agrees | 66 | 0 | 0 | 6 |
 | Phenom | idsanh | idsanh | agrees | 72 | 0 | 0 | 0 |
 | Phenom | idssr | idssr | agrees | 72 | 0 | 0 | 0 |
 | Phenom | lmthick | lmthick | agrees | 0 | 0 | 0 | 0 |

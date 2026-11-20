@@ -1,0 +1,4 @@
+record_id,event,age,sex
+1,screening_visit_arm_1,58,1
+2,screening_visit_arm_1,42,2
+3,screening_visit_arm_1,50,1

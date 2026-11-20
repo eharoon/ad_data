@@ -32,7 +32,7 @@ Some columns are held back until open data problems are resolved: the two ReHo c
 
 ### Combined master (dat_combined.csv)
 
-`dat_harmonized.csv` is the single master and stays unchanged. `scripts/build_master_combined.py` writes a second master, `dat_combined.csv`, which adds Midlife plasma albumin, CSF albumin and QAlb from `QAlbumin_discovery_values_2026-11-12.csv`. It also writes `dat_combined_provenance.md`, which records the SHA-256 of both inputs. The script stops if the master's hash differs from the confirmed version, or if any Midlife albumin row disagrees with the master on age or group.
+`dat_harmonized.csv` is the single master and stays unchanged. `scripts/build_master_combined.py` writes a second master, `dat_combined.csv`, which adds Midlife plasma albumin, CSF albumin and QAlb from the lab workbook `MIDLIFE_Albumin_20261026.xlsx`, using the means of the duplicate readings and relabelling lab ID 25 as 26. It also writes `dat_combined_provenance.md`, which records the SHA-256 of both inputs. The script stops if the master's hash differs from the confirmed version, or if the lab IDs are not exactly the Midlife participants with CSF.
 
 ### Running it
 

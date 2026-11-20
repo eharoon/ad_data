@@ -4,9 +4,15 @@
 dat_harmonized.csv (!ADgrant/R/ADMs, written by harmonize_data.qmd) is the
 single master and provenance file. This script never edits it. It adds the
 Midlife (discovery) plasma albumin, CSF albumin and albumin quotient (QAlb)
-from QAlbumin_discovery_values_2026-11-12.csv (owner-final 2026-11-12) to the
-Mlife rows, the same way qalb_adjustment_2026-11-12.qmd does, and writes the
-result as a second master, dat_combined.csv, with a provenance note beside it.
+from the lab workbook MIDLIFE_Albumin_20261026.xlsx to the Mlife rows, the same
+way qalb_adjustment_2026-11-12.qmd does, and writes the result as a second
+master, dat_combined.csv, with a provenance note beside it.
+
+The workbook gives duplicate CSF (V1, V2) and plasma (VP1, VP2) readings per
+participant; the means (Vmean, Vpmean, in g/dL) are used, and QAlb is
+CSF/PLASMA x 1000. Lab ID 25 is relabelled 26 (owner-final 2026-11-12: there
+is no Midlife participant 25 with CSF, and 26 is the one missing from the lab
+sheet).
 
 Phenom rows already carry plasma albumin, CSF albumin and QAlb in the master
 and are left exactly as they are.
@@ -14,7 +20,7 @@ and are left exactly as they are.
 Usage:
   python scripts/build_master_combined.py \\
       --master  ".../R/ADMs/dat_harmonized.csv" \\
-      --qalb    ".../!writing plan/Tables/QAlbumin_discovery_values_2026-11-12.csv" \\
+      --albumin ".../MIDLIFE_Albumin_20261026.xlsx" \\
       --out-dir ".../R/ADMs"
 """
 
@@ -33,20 +39,29 @@ import pandas as pd
 # the script stops so the change is noticed rather than silently absorbed.
 MASTER_SHA256 = "05ebb763cd8ad287655ceeb481e3b1df92cd58c12bfb8d1e29f87e00c91e8388"
 
-# master column <- discovery-file column
+# master column <- lab-workbook column
 ALBUMIN = {
-    "plasma_albumin_gdl": "plasma_alb_mean_gdl",
-    "csf_albumin_gdl": "csf_alb_mean_gdl",
+    "plasma_albumin_gdl": "Vpmean",
+    "csf_albumin_gdl": "Vmean",
     "qalbumin": "qalb_x1000",
 }
-EXPECTED_MATCHES = 54  # Midlife participants with CSF
+ID_RELABEL = {25: 26}  # owner-final 2026-11-12 (see qalb_adjustment_2026-11-12.qmd)
+HEADER_ROW = 4         # rows 0-3 hold the title, date and CSF/Plasma banner
+
+
+def read_lab(path: Path) -> pd.DataFrame:
+    lab = pd.read_excel(path, header=HEADER_ROW)
+    lab = lab.dropna(subset=["ID"])          # trailing blank and summary rows
+    lab["id"] = lab["ID"].astype(int).replace(ID_RELABEL)
+    lab["qalb_x1000"] = lab["CSF/PLASMA"] * 1000
+    return lab
 
 
 def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def build(master_path: Path, qalb_path: Path, allow_new_master: bool = False):
+def build(master_path: Path, lab_path: Path, allow_new_master: bool = False):
     digest = sha256(master_path)
     if digest != MASTER_SHA256 and not allow_new_master:
         sys.exit(
@@ -55,40 +70,25 @@ def build(master_path: Path, qalb_path: Path, allow_new_master: bool = False):
             "Confirm the new version, then rerun with --allow-new-master."
         )
     master = pd.read_csv(master_path)
-    disc = pd.read_csv(qalb_path)
+    lab = read_lab(lab_path)
 
-    missing = [c for c in ["id", "age", "subgrp", *ALBUMIN.values()] if c not in disc.columns]
-    if missing:
-        sys.exit(f"{qalb_path.name} lacks columns: {missing}")
-    if disc["id"].duplicated().any():
-        sys.exit(f"{qalb_path.name} has duplicate ids: {sorted(disc.loc[disc['id'].duplicated(), 'id'])}")
-
+    if lab["id"].duplicated().any():
+        sys.exit(f"duplicate lab ids after relabelling: {sorted(lab.loc[lab['id'].duplicated(), 'id'])}")
     mlife = master["study"] == "Mlife"
-    already = master.loc[mlife, list(ALBUMIN)].notna().any(axis=None)
-    if already:
+    if master.loc[mlife, list(ALBUMIN)].notna().any(axis=None):
         sys.exit("The master already holds Mlife albumin values; refusing to overwrite them.")
 
-    # Same identity checks as qalb_adjustment_2026-11-12.qmd: every discovery
-    # row must match a Mlife participant on age (within 0.6 y) and group.
-    chk = master.loc[mlife, ["id", "age", "subgrp"]].merge(
-        disc[["id", "age", "subgrp"]], on="id", suffixes=("", "_lab"))
-    problems = []
-    if len(chk) != EXPECTED_MATCHES:
-        problems.append(f"{len(chk)} Mlife ids matched, expected {EXPECTED_MATCHES}")
-    unmatched = sorted(set(disc["id"]) - set(master.loc[mlife, "id"]))
-    if unmatched:
-        problems.append(f"discovery ids not among Mlife rows: {unmatched}")
-    bad_age = chk.loc[(chk["age"] - chk["age_lab"]).abs() >= 0.6, "id"].tolist()
-    if bad_age:
-        problems.append(f"age disagrees by >= 0.6 y for ids {bad_age}")
-    bad_grp = chk.loc[chk["subgrp"] != chk["subgrp_lab"], "id"].tolist()
-    if bad_grp:
-        problems.append(f"group disagrees for ids {bad_grp}")
-    if problems:
-        sys.exit("Identity checks failed: " + "; ".join(problems))
+    # The lab sheet must cover exactly the Midlife participants with CSF.
+    with_csf = set(master.loc[mlife & (master["csf"] == 1), "id"])
+    extra, absent = sorted(set(lab["id"]) - with_csf), sorted(with_csf - set(lab["id"]))
+    if extra or absent:
+        sys.exit(f"Lab ids do not match Mlife csf == 1: not in master {extra}; missing from lab {absent}")
+    # CSF/PLASMA in the sheet must equal Vmean / Vpmean.
+    if not np.allclose(lab["CSF/PLASMA"], lab["Vmean"] / lab["Vpmean"], rtol=1e-6):
+        sys.exit("CSF/PLASMA column does not equal Vmean / Vpmean")
 
     combined = master.copy()
-    lookup = disc.set_index("id")
+    lookup = lab.set_index("id")
     for col, src in ALBUMIN.items():
         combined.loc[mlife, col] = combined.loc[mlife, "id"].map(lookup[src]).values
 
@@ -104,7 +104,7 @@ def build(master_path: Path, qalb_path: Path, allow_new_master: bool = False):
 
     info = {
         "master_sha256": digest,
-        "qalb_sha256": sha256(qalb_path),
+        "lab_sha256": sha256(lab_path),
         "n_rows": len(combined),
         "filled": {c: int(combined.loc[mlife, c].notna().sum()) for c in ALBUMIN},
         "qalb_ratio_mismatch": off.values.tolist(),
@@ -112,7 +112,7 @@ def build(master_path: Path, qalb_path: Path, allow_new_master: bool = False):
     return combined, info
 
 
-def write_provenance(path: Path, master_path: Path, qalb_path: Path, info: dict):
+def write_provenance(path: Path, master_path: Path, lab_path: Path, info: dict):
     filled = "\n".join(f"| `{c}` | `{s}` | {info['filled'][c]} |" for c, s in ALBUMIN.items())
     mismatch = (
         "QAlb equals CSF albumin / plasma albumin x 1000 for every participant with all three values."
@@ -128,17 +128,17 @@ Built {datetime.now(timezone.utc):%Y-%m-%d %H:%M UTC} by `scripts/build_master_c
 | Role | File | SHA-256 |
 |---|---|---|
 | Master (unchanged) | `{master_path.name}` | `{info['master_sha256']}` |
-| Midlife albumin | `{qalb_path.name}` | `{info['qalb_sha256']}` |
+| Midlife albumin (lab workbook) | `{lab_path.name}` | `{info['lab_sha256']}` |
 
 ## What was added
 
 `dat_combined.csv` is `dat_harmonized.csv` with Midlife (study = Mlife) albumin filled in. All other cells are identical to the master. Phenom albumin values come from the master unchanged.
 
-| Column | Taken from | Mlife participants filled |
+| Column | Lab column | Mlife participants filled |
 |---|---|---|
 {filled}
 
-Rows are matched on `id` within study = Mlife. Every Midlife albumin row was checked to agree with the master on age (within 0.6 years) and group before merging.
+Rows are matched on `id` within study = Mlife. The lab IDs, after relabelling lab ID 25 as 26 (owner-final 2026-11-12), equal exactly the Midlife participants with `csf == 1`. Albumin values are the means of the duplicate readings in g/dL, and QAlb is CSF/plasma x 1000.
 
 {mismatch}
 
@@ -149,15 +149,15 @@ Rows: {info['n_rows']}.
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--master", type=Path, required=True)
-    ap.add_argument("--qalb", type=Path, required=True)
+    ap.add_argument("--albumin", type=Path, required=True, help="MIDLIFE_Albumin lab workbook (.xlsx)")
     ap.add_argument("--out-dir", type=Path, required=True)
     ap.add_argument("--allow-new-master", action="store_true")
     args = ap.parse_args(argv)
 
-    combined, info = build(args.master, args.qalb, args.allow_new_master)
+    combined, info = build(args.master, args.albumin, args.allow_new_master)
     args.out_dir.mkdir(parents=True, exist_ok=True)
     combined.to_csv(args.out_dir / "dat_combined.csv", index=False)
-    write_provenance(args.out_dir / "dat_combined_provenance.md", args.master, args.qalb, info)
+    write_provenance(args.out_dir / "dat_combined_provenance.md", args.master, args.albumin, info)
     print(f"dat_combined.csv: {info['n_rows']} rows; Mlife filled {info['filled']}")
     if info["qalb_ratio_mismatch"]:
         print(f"QAlb ratio mismatch: {info['qalb_ratio_mismatch']}")

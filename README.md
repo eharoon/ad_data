@@ -10,7 +10,8 @@ Data and analyses for the Alzheimer's disease (AD) line of work in the Emory Beh
 |---|---|
 | `config/sources.yaml` | Linking rules: for each source file, its ID column, how that ID maps to the canonical participant ID, its timepoint, and any renames |
 | `scripts/build_combined.py` | Reads the sources, applies the rules, merges, and writes the outputs below |
-| `output/<table>.csv` | Merged table(s), `combined.csv` by default; a source can be sent to a separate table such as a second cohort (git-ignored) |
+| `output/data_harmonized.csv` | The harmonized Midlife table, kept as the provenance (master) file from which analysis datasets are derived; each column's source is in the data dictionary (git-ignored) |
+| `output/data_harmonized_phenom.csv` | The harmonized Phenom table (git-ignored) |
 | `output/conflicts.csv` | Every cell where two sources disagree (git-ignored) |
 | `docs/data_dictionary.csv` | One row per variable: source file, sheet, original column name, rename |
 | `docs/merge_qc_report.md` | Per-source counts, unmapped IDs, unmatched participants, duplicate keys, conflicting values |
@@ -20,7 +21,7 @@ Data and analyses for the Alzheimer's disease (AD) line of work in the Emory Beh
 
 - Each participant is identified by `subject_key`: `MIDL001`–`MIDL092` for the Midlife study and `PHE001`–`PHE115` for Phenom. The prefix is needed because both cohorts reuse the numbers 1–92. The seven ID formats found in the source files (`1`, `001`, `M001`, `MIDL01`, `MidLife_subj001`, Haroon ID, `PHE001`) all convert to this key.
 - Each cohort was seen once, so each table has one row per participant and no timepoint column.
-- Midlife goes to `output/combined.csv` and Phenom to `output/phenom.csv`.
+- Midlife goes to `output/data_harmonized.csv` and Phenom to `output/data_harmonized_phenom.csv`.
 - Sources are listed in priority order. REDCap wins for demographics and group, and the original lab or scanner file wins over derived analysis files.
 - Sex is coded 1 = male, 2 = female, and group 0 = control, 1 = depressed.
 

@@ -5,7 +5,8 @@
 #   - Key: subject_key = MIDL### (Midlife) or PHE### (Phenom). The cohorts
 #     reuse the numbers 1-92, so the prefix is part of the key.
 #   - One visit per participant, so there is no timepoint key.
-#   - Midlife goes to combined.csv; Phenom goes to its own phenom.csv.
+#   - Midlife goes to data_harmonized.csv, the provenance (master) file;
+#     Phenom goes to its own data_harmonized_phenom.csv.
 #   - Conflicts: sources are listed in priority order. REDCap comes first for
 #     demographics and group; the original lab or scanner file comes before
 #     derived analysis files for biomarker and imaging values.
@@ -31,7 +32,7 @@
 #   prefix        prepended to every variable name from this source
 #   rename        {original column: new name}; overrides prefix for that column
 #   drop_columns  columns not carried into the combined table
-#   table         output table name (default "combined")
+#   table         output table name (default "data_harmonized")
 #   recode        {column: {raw value: new value}}
 #   scale         {column: factor}, e.g. 1000 to turn ng/mL into pg/mL
 #   on_duplicate  "error" (default: skip the source) or "first" (keep first row per key)
@@ -46,11 +47,11 @@ single_visit: true
 id_format: "MIDL{:03d}"
 
 roster:
-  combined: demographics        # all 92 enrolled Midlife records
-  phenom: phenom_with_metabolics
+  data_harmonized: demographics        # all 92 enrolled Midlife records
+  data_harmonized_phenom: phenom_with_metabolics
 
 sources:
-  # ======================= Midlife (combined.csv) ===========================
+  # ======================= Midlife (data_harmonized.csv) ====================
 
   # ---- Clinical / REDCap (highest priority for demographics and group) ----
   - name: demographics_master    # curated demographics; records 1-90
@@ -223,28 +224,28 @@ sources:
     id_rule: {type: as_is}
     drop_columns: [a42ReHo, pgfReHo]            # labels may be swapped; held until confirmed
 
-  # ======================= Phenom (phenom.csv) ==============================
+  # ======================= Phenom (data_harmonized_phenom.csv) ==============
   # Phenom_Master_F comes first: from PHE091 on, the metabolic panel in
   # phenom_with_metabolics (CHOL, TG, HDLc, LDLc, non-HDLc, GLU, INS, Leptin,
   # Adiponectin, Resistin, Osteopontin, NEFA, FolicAcid) sits one participant
   # lower than in Phenom_Master_F (e.g. the 97 that Phenom_Master_F gives
   # PHE091 appears at PHE094). The merge QC report lists every such cell.
   - name: phenom_master
-    table: phenom
+    table: data_harmonized_phenom
     file: Phenom_Master_F.xlsx
     id_column: ID
     id_rule: {type: as_is}
     id_format: "PHE{:03d}"
 
   - name: phenom_with_metabolics
-    table: phenom
+    table: data_harmonized_phenom
     file: phenom_with_metabolics.csv
     id_column: id
     id_rule: {type: as_is}
     id_format: "PHE{:03d}"
 
   - name: albumin
-    table: phenom
+    table: data_harmonized_phenom
     file: alb_phenom.xlsx
     id_column: "subject_id inpatient_day_2_arm_1"
     id_rule: {type: regex, pattern: "PHE(\\d+)"}

@@ -17,7 +17,7 @@ def run(tmp_path):
         "--out-dir", str(tmp_path / "out"),
         "--docs-dir", str(tmp_path / "docs"),
     ])
-    combined = pd.read_csv(tmp_path / "out" / "combined.csv", dtype={"participant_id": str})
+    combined = pd.read_csv(tmp_path / "out" / "data_harmonized.csv", dtype={"participant_id": str})
     conflicts = pd.read_csv(tmp_path / "out" / "conflicts.csv", dtype={"participant_id": str})
     dictionary = pd.read_csv(tmp_path / "docs" / "data_dictionary.csv")
     report = (tmp_path / "docs" / "merge_qc_report.md").read_text()

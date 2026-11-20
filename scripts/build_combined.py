@@ -8,7 +8,7 @@ skipped and listed in the QC report, so the script never guesses a rule.
 
 Outputs:
   <out-dir>/<table>.csv           one merged table per `table` in the config
-                                  (default "data_harmonized"; git-ignored, holds data)
+                                  (default "combined"; git-ignored, holds data)
   docs/data_dictionary.csv        one row per variable: source file, sheet,
                                   original column, rename
   docs/merge_qc_report.md         per-source counts, unmatched IDs, duplicate
@@ -33,7 +33,7 @@ import yaml
 REPO = Path(__file__).resolve().parent.parent
 PID, TP = "participant_id", "timepoint"
 TODO = "TODO"
-DEFAULT_TABLE = "data_harmonized"
+DEFAULT_TABLE = "combined"
 
 
 # ---------------------------------------------------------------- config ---

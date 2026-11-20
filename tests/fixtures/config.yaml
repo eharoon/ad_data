@@ -1,6 +1,6 @@
 data_dir: .
 id_format: "{:03d}"
-roster: {data_harmonized: clinical}
+roster: {combined: clinical}
 sources:
   - name: clinical
     file: clinical.csv
